@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useId } from "react";
+import { Suspense, useState, useId, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -12,11 +12,15 @@ import {
   FiAlertCircle,
   FiArrowRight,
   FiCheck,
+  FiX,
+  FiShield,
+  FiRefreshCw,
 } from "react-icons/fi";
 import { useAuth } from "../../../lib/authContext";
+import api from "../../../lib/api";
 
 function RegisterForm() {
-  const { register } = useAuth();
+  const { setUser } = useAuth(); // Updates user state after successful OTP verification
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/";
@@ -30,11 +34,31 @@ function RegisterForm() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Simple client-side strength checks
+  // OTP Popup state
+  const [isOtpOpen, setIsOtpOpen] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [otpSubmitting, setOtpSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [timer, setTimer] = useState(60);
+
+  // Password checks
   const hasMinLength = form.password.length >= 8;
   const hasNumberOrSpecial = /[0-9!@#$%^&*]/.test(form.password);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Countdown timer for Resend OTP
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isOtpOpen && timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isOtpOpen, timer]);
+
+  // Step 1: Request OTP and open popup
+  const handleInitiateRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -45,14 +69,77 @@ function RegisterForm() {
 
     setSubmitting(true);
     try {
-      await register(form.name, form.email, form.password);
-      router.push(redirect);
+      await api.post("/auth/register/send-otp", {
+        name: form.name,
+        email: form.email,
+        password: form.password,
+      });
+      setIsOtpOpen(true);
+      setTimer(60);
+      setOtp("");
+      setOtpError("");
     } catch (err: any) {
       setError(
-        err.response?.data?.message || "Registration failed. Please try again.",
+        err.response?.data?.message ||
+          "Failed to send verification code. Please try again.",
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Step 2: Resend OTP handler inside popup
+  const handleResendOtp = async () => {
+    if (timer > 0 || resending) return;
+    setResending(true);
+    setOtpError("");
+    try {
+      await api.post("/auth/register/send-otp", {
+        name: form.name,
+        email: form.email,
+        password: form.password,
+      });
+      setTimer(60);
+    } catch (err: any) {
+      setOtpError(err.response?.data?.message || "Failed to resend code.");
+    } finally {
+      setResending(false);
+    }
+  };
+
+  // Step 3: Verify OTP, create account & log in
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otp.length < 6) {
+      setOtpError("Please enter a valid 6-digit OTP.");
+      return;
+    }
+
+    setOtpSubmitting(true);
+    setOtpError("");
+    try {
+      const res = await api.post("/auth/register/verify-otp", {
+        email: form.email,
+        otp: otp.trim(),
+      });
+
+      // Store JWT token if returned by your backend auth response
+      if (res.data?.token) {
+        localStorage.setItem("token", res.data.token);
+      }
+      if (setUser && res.data?.user) {
+        setUser(res.data.user);
+      }
+
+      setIsOtpOpen(false);
+      router.push(redirect);
+    } catch (err: any) {
+      setOtpError(
+        err.response?.data?.message ||
+          "Invalid verification code. Please try again.",
+      );
+    } finally {
+      setOtpSubmitting(false);
     }
   };
 
@@ -89,7 +176,7 @@ function RegisterForm() {
           )}
 
           {/* Registration Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleInitiateRegister} className="space-y-4">
             {/* Full Name */}
             <div>
               <label
@@ -231,11 +318,11 @@ function RegisterForm() {
               {submitting ? (
                 <>
                   <span className="w-3.5 h-3.5 border-2 border-ivory border-t-transparent rounded-full animate-spin" />
-                  <span>Creating Account...</span>
+                  <span>Sending Verification Code...</span>
                 </>
               ) : (
                 <>
-                  <span>Create Account</span>
+                  <span>Continue</span>
                   <FiArrowRight size={14} />
                 </>
               )}
@@ -254,6 +341,92 @@ function RegisterForm() {
           </div>
         </div>
       </div>
+
+      {/* OTP Verification Modal Popup */}
+      {isOtpOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-gold/30 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setIsOtpOpen(false)}
+              className="absolute top-4 right-4 text-brand/40 hover:text-brand transition-colors p-1"
+            >
+              <FiX size={18} />
+            </button>
+
+            <div className="text-center mb-6">
+              <div className="w-12 h-12 rounded-full bg-gold/15 text-clay flex items-center justify-center mx-auto mb-3">
+                <FiShield size={24} />
+              </div>
+              <h2 className="font-serif text-xl text-brand font-normal">
+                Verify Email
+              </h2>
+              <p className="text-xs text-brand/60 mt-1">
+                Enter the 6-digit code sent to <br />
+                <span className="font-semibold text-brand">{form.email}</span>
+              </p>
+            </div>
+
+            {otpError && (
+              <div className="mb-4 p-2.5 rounded-xl bg-rose-50/80 border border-rose-200/70 flex items-start gap-2 text-xs text-rose-800">
+                <FiAlertCircle
+                  size={14}
+                  className="text-rose-500 shrink-0 mt-0.5"
+                />
+                <span>{otpError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                  placeholder="••••••"
+                  className="w-full text-center text-2xl tracking-[0.6em] font-mono py-2.5 bg-ivory/30 border border-gold/30 rounded-xl text-brand placeholder:tracking-widest placeholder:text-brand/20 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/30"
+                  autoFocus
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={otpSubmitting || otp.length < 6}
+                className="w-full py-3 px-4 bg-brand text-ivory text-xs font-semibold uppercase tracking-widest rounded-xl hover:bg-brand/90 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {otpSubmitting ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-ivory border-t-transparent rounded-full animate-spin" />
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  <span>Verify & Create Account</span>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-5 text-center text-xs text-brand/60">
+              {timer > 0 ? (
+                <span>Resend code in {timer}s</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={resending}
+                  className="text-clay font-medium inline-flex items-center gap-1 hover:underline disabled:opacity-50"
+                >
+                  <FiRefreshCw
+                    size={12}
+                    className={resending ? "animate-spin" : ""}
+                  />
+                  <span>Resend OTP</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
