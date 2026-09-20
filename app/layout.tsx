@@ -1,4 +1,5 @@
 import { Fraunces, Work_Sans } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import MetaPixel from "../components/MetaPixel";
@@ -36,6 +37,7 @@ export default function RootLayout({ children }) {
             <Footer />
           </CartProvider>
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
