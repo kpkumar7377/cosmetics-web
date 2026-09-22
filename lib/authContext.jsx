@@ -10,7 +10,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const loadUser = async () => {
-    const token = localStorage.getItem("token");
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("token") : null;
     if (!token) {
       setLoading(false);
       return;
@@ -20,6 +21,7 @@ export function AuthProvider({ children }) {
       setUser(data.user);
     } catch (_) {
       localStorage.removeItem("token");
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -29,28 +31,55 @@ export function AuthProvider({ children }) {
     loadUser();
   }, []);
 
+  // Helper to establish session immediately from login/register/verify-otp responses
+  const setAuthSession = (token, userData) => {
+    if (token) {
+      localStorage.setItem("token", token);
+    }
+    if (userData) {
+      setUser(userData);
+    }
+  };
+
   const login = async (email, password) => {
     const { data } = await api.post("/auth/login", { email, password });
-    localStorage.setItem("token", data.token);
-    setUser(data.user);
+    setAuthSession(data.token, data.user);
     return data.user;
   };
 
   const register = async (name, email, password) => {
-    const { data } = await api.post("/auth/register", { name, email, password });
-    localStorage.setItem("token", data.token);
-    setUser(data.user);
+    const { data } = await api.post("/auth/register", {
+      name,
+      email,
+      password,
+    });
+    setAuthSession(data.token, data.user);
     return data.user;
   };
 
   const logout = async () => {
-    await api.post("/auth/logout");
+    try {
+      await api.post("/auth/logout");
+    } catch (_) {
+      // Proceed with local cleanup regardless
+    }
     localStorage.removeItem("token");
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser: loadUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        setUser,
+        setAuthSession,
+        loading,
+        login,
+        register,
+        logout,
+        refreshUser: loadUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

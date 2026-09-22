@@ -20,7 +20,7 @@ import { useAuth } from "../../../lib/authContext";
 import api from "../../../lib/api";
 
 function RegisterForm() {
-  const { setUser } = useAuth(); // Updates user state after successful OTP verification
+  const { setAuthSession } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/";
@@ -123,16 +123,15 @@ function RegisterForm() {
         otp: otp.trim(),
       });
 
-      // Store JWT token if returned by your backend auth response
-      if (res.data?.token) {
-        localStorage.setItem("token", res.data.token);
-      }
-      if (setUser && res.data?.user) {
-        setUser(res.data.user);
+      // Save token and update context user state together
+      if (res.data?.token && res.data?.user) {
+        setAuthSession(res.data.token, res.data.user);
       }
 
       setIsOtpOpen(false);
-      router.push(redirect);
+
+      // Force a direct navigation to ensure root headers and contexts synchronize
+      window.location.href = redirect;
     } catch (err: any) {
       setOtpError(
         err.response?.data?.message ||
