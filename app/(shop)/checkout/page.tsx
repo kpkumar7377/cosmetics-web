@@ -116,11 +116,18 @@ export default function CheckoutPage() {
   const codBlockedItems = items.filter((i) => i.codEligible === false);
   const codAvailable = codBlockedItems.length === 0;
 
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
-    if (!authLoading && !user) {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    // Only redirect once client has mounted AND auth check is completely finished
+    if (mounted && !authLoading && !user) {
       router.replace("/login?redirect=/checkout");
     }
-  }, [authLoading, user, router]);
+  }, [mounted, authLoading, user, router]);
 
   useEffect(() => {
     if (!codAvailable && paymentMethod === "cod") setPaymentMethod("razorpay");
@@ -354,6 +361,15 @@ export default function CheckoutPage() {
         return;
       }
 
+      // Safeguard for Razorpay script initialization
+      if (typeof window.Razorpay === "undefined") {
+        alert(
+          "Payment gateway is still initializing. Please wait a moment and try again.",
+        );
+        setLoading(false);
+        return;
+      }
+
       const { data: rp } = await api.post("/payments/razorpay/create-order", {
         orderId: order._id,
       });
@@ -391,7 +407,17 @@ export default function CheckoutPage() {
     }
   };
 
-  if (authLoading || !user) {
+  // Guard 1: Still mounting or validating auth
+  if (!mounted || authLoading) {
+    return (
+      <p className="px-4 py-24 text-center text-xs sm:text-sm text-ink/50">
+        Loading checkout…
+      </p>
+    );
+  }
+
+  // Guard 2: Not logged in after check completes
+  if (!user) {
     return (
       <p className="px-4 py-24 text-center text-xs sm:text-sm text-ink/50">
         Redirecting to login…
@@ -399,6 +425,7 @@ export default function CheckoutPage() {
     );
   }
 
+  // Guard 3: Empty cart
   if (items.length === 0) {
     return (
       <p className="px-4 py-24 text-center text-xs sm:text-sm text-ink/50">
@@ -411,7 +438,7 @@ export default function CheckoutPage() {
     <>
       <Script
         src="https://checkout.razorpay.com/v1/checkout.js"
-        strategy="lazyOnload"
+        strategy="afterInteractive"
       />
 
       {/* Sticky Mobile Order Summary Bar */}
