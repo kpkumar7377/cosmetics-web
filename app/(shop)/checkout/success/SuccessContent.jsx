@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -11,16 +11,26 @@ import {
   FiArrowRight,
   FiShield,
   FiCopy,
+  FiLoader,
 } from "react-icons/fi";
 import { trackEvent } from "../../../../lib/fpixel";
 
 export default function SuccessContent() {
   const params = useSearchParams();
+  const [copied, setCopied] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+
+  // Safely extract params
   const orderNumber = params.get("orderNumber");
   const orderId = params.get("orderId") || orderNumber;
   const value = params.get("value");
-  const [copied, setCopied] = useState(false);
 
+  // Ensure params are hydrated before rendering active dynamic links
+  useEffect(() => {
+    setIsReady(true);
+  }, []);
+
+  // Track Meta Purchase Pixel
   useEffect(() => {
     if (!orderNumber) return;
     trackEvent("Purchase", {
@@ -37,6 +47,12 @@ export default function SuccessContent() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // Determine correct target URL
+  const trackOrderHref = useMemo(() => {
+    if (orderId) return `/account/orders/${orderId}`;
+    return "/account/orders";
+  }, [orderId]);
 
   return (
     <div className="min-h-[75vh] flex items-center justify-center px-4 py-12 sm:py-16">
@@ -68,29 +84,33 @@ export default function SuccessContent() {
           </p>
 
           {/* Order Reference Snippet */}
-          {orderNumber && (
-            <div className="mt-6 mb-8 inline-flex items-center gap-2 bg-ivory border border-gold/30 rounded-full px-4 py-2 text-xs">
-              <span className="text-brand/60">Reference:</span>
-              <span className="font-mono font-semibold text-brand tracking-wide">
-                #{orderNumber}
-              </span>
-              <button
-                type="button"
-                onClick={copyOrderNumber}
-                aria-label="Copy order number"
-                className="ml-1 text-brand/50 hover:text-brand transition-colors"
-                title="Copy reference number"
-              >
-                {copied ? (
-                  <span className="text-emerald-700 text-[10px] font-medium">
-                    Copied!
-                  </span>
-                ) : (
-                  <FiCopy size={13} />
-                )}
-              </button>
-            </div>
-          )}
+          <div className="mt-6 mb-8 min-h-[38px] flex items-center justify-center">
+            {orderNumber ? (
+              <div className="inline-flex items-center gap-2 bg-ivory border border-gold/30 rounded-full px-4 py-2 text-xs">
+                <span className="text-brand/60">Reference:</span>
+                <span className="font-mono font-semibold text-brand tracking-wide">
+                  #{orderNumber}
+                </span>
+                <button
+                  type="button"
+                  onClick={copyOrderNumber}
+                  aria-label="Copy order number"
+                  className="ml-1 text-brand/50 hover:text-brand transition-colors"
+                  title="Copy reference number"
+                >
+                  {copied ? (
+                    <span className="text-emerald-700 text-[10px] font-medium">
+                      Copied!
+                    </span>
+                  ) : (
+                    <FiCopy size={13} />
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="h-8 w-44 bg-brand/5 rounded-full animate-pulse" />
+            )}
+          </div>
 
           {/* Fulfillment Milestones Card */}
           <div className="bg-ivory/60 border border-gold/15 rounded-2xl p-4 sm:p-5 text-left mb-8 space-y-3.5">
@@ -125,13 +145,21 @@ export default function SuccessContent() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3">
-            <Link
-              href={orderId ? `/account/orders/${orderId}` : "/account/orders"}
-              className="flex-1 inline-flex items-center justify-center gap-2 py-3 px-5 rounded-xl bg-brand text-ivory text-xs font-semibold uppercase tracking-widest hover:bg-brand/90 hover:shadow-md transition-all duration-150"
-            >
-              <span>Track Order</span>
-              <FiArrowRight size={14} />
-            </Link>
+            {isReady ? (
+              <Link
+                href={trackOrderHref}
+                prefetch={false} // Crucial: stops pre-fetching stale cache before order is committed
+                className="flex-1 inline-flex items-center justify-center gap-2 py-3 px-5 rounded-xl bg-brand text-ivory text-xs font-semibold uppercase tracking-widest hover:bg-brand/90 hover:shadow-md transition-all duration-150"
+              >
+                <span>Track Order</span>
+                <FiArrowRight size={14} />
+              </Link>
+            ) : (
+              <div className="flex-1 py-3 px-5 rounded-xl bg-brand/40 text-ivory text-xs font-semibold uppercase tracking-widest flex items-center justify-center gap-2">
+                <FiLoader className="animate-spin" size={14} />
+                <span>Loading...</span>
+              </div>
+            )}
 
             <Link
               href="/products"
