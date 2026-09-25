@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FiShoppingCart, FiHeart, FiCheck } from "react-icons/fi";
+import { FiShoppingCart, FiCheck } from "react-icons/fi";
 import Link from "next/link";
 import { useCart } from "../lib/cartContext";
 
 export default function ProductCard({ product }) {
   const { addItem, items } = useCart();
   const router = useRouter();
-  const [liked, setLiked] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
 
   if (!product) return null;
@@ -83,12 +82,6 @@ export default function ProductCard({ product }) {
     setTimeout(() => setJustAdded(false), 900);
   };
 
-  const handleLike = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setLiked((v) => !v);
-  };
-
   return (
     <div className="group relative flex flex-col h-full bg-white rounded-2xl border border-gold/15 hover:border-gold/30 hover:shadow-md transition-all duration-300 overflow-hidden">
       {/* Product Image Section */}
@@ -114,20 +107,6 @@ export default function ProductCard({ product }) {
             </span>
           ) : null}
         </div>
-
-        {/* Wishlist Button */}
-        <button
-          type="button"
-          onClick={handleLike}
-          aria-label={liked ? "Remove from wishlist" : "Add to wishlist"}
-          className={`absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-sm ${
-            liked
-              ? "bg-clay text-ivory"
-              : "bg-ivory/90 text-ink/60 hover:text-ink"
-          }`}
-        >
-          <FiHeart size={14} className={liked ? "fill-current" : ""} />
-        </button>
 
         {/* Out of Stock Overlay */}
         {isOutOfStock && (
