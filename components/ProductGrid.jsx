@@ -6,11 +6,11 @@ import ProductCard from "./ProductCard";
 const SORTS = {
   default: {
     label: "Featured first",
-    fn: (a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0),
+    fn: (a, b) => Number(b.isFeatured || 0) - Number(a.isFeatured || 0),
   },
   relevance: {
     label: "Recommended",
-    fn: () => 0, // no-op — keeps the server's order (newest / bestseller) intact
+    fn: () => 0, // Retains server-side order
   },
   priceLow: {
     label: "Price: low to high",
@@ -20,33 +20,31 @@ const SORTS = {
     label: "Price: high to low",
     fn: (a, b) => b.basePrice - a.basePrice,
   },
-  name: { label: "Name: A to Z", fn: (a, b) => a.name.localeCompare(b.name) },
+  name: {
+    label: "Name: A to Z",
+    fn: (a, b) => a.name.localeCompare(b.name),
+  },
 };
 
-export default function ProductGrid({ products, preserveOrder = false }) {
+export default function ProductGrid({ products = [], preserveOrder = false }) {
   const [sort, setSort] = useState(preserveOrder ? "relevance" : "default");
 
-  // When the list already arrives sorted (newest/bestseller from the home
-  // page "View All" links), don't offer "Featured first" — it would silently
-  // undo the ordering the customer navigated here for.
-  const sortOptions = preserveOrder
-    ? {
+  const sortOptions = useMemo(() => {
+    if (preserveOrder) {
+      return {
         relevance: SORTS.relevance,
         priceLow: SORTS.priceLow,
         priceHigh: SORTS.priceHigh,
         name: SORTS.name,
-      }
-    : {
-        default: SORTS.default,
-        priceLow: SORTS.priceLow,
-        priceHigh: SORTS.priceHigh,
-        name: SORTS.name,
       };
+    }
+    return SORTS;
+  }, [preserveOrder]);
 
-  const sorted = useMemo(
-    () => [...products].sort(SORTS[sort].fn),
-    [products, sort],
-  );
+  const sortedProducts = useMemo(() => {
+    const activeSortFn = SORTS[sort]?.fn || SORTS.relevance.fn;
+    return [...products].sort(activeSortFn);
+  }, [products, sort]);
 
   return (
     <div>
@@ -66,8 +64,8 @@ export default function ProductGrid({ products, preserveOrder = false }) {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-10">
-        {sorted.map((p) => (
-          <ProductCard key={p.slug} product={p} />
+        {sortedProducts.map((p) => (
+          <ProductCard key={p.slug || p.id} product={p} />
         ))}
       </div>
     </div>

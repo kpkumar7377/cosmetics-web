@@ -14,18 +14,29 @@ async function getCategoryName(slug) {
 }
 
 export default async function ProductListingPage({ searchParams }) {
-  const categoryName = await getCategoryName(searchParams.category);
+  // Await searchParams for Next.js 15+ compatibility (safe for Next.js 14 too)
+  const resolvedParams = await searchParams;
+
+  const category = resolvedParams?.category || "";
+  const search = resolvedParams?.search || "";
+  const sort = resolvedParams?.sort || "";
+  const sale = Boolean(resolvedParams?.sale);
+
+  const categoryName = await getCategoryName(category);
 
   const sortHeading =
-    searchParams.sort === "newest"
+    sort === "newest"
       ? "New Arrivals"
-      : searchParams.sort === "bestseller"
+      : sort === "bestseller"
         ? "Bestsellers"
         : null;
 
-  const heading = searchParams.search
-    ? `Results for "${searchParams.search}"`
+  const heading = search
+    ? `Results for "${search}"`
     : categoryName || sortHeading || "All Products";
+
+  // Build a unique key so React resets state on query param transitions
+  const instanceKey = `${category}-${search}-${sort}-${sale}`;
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12">
@@ -42,24 +53,23 @@ export default async function ProductListingPage({ searchParams }) {
         <BackButton />
       </div>
 
-      {searchParams.search && (
+      {search && (
         <Link
           href="/products"
           className="inline-flex items-center gap-1.5 mb-8 text-xs bg-blush text-ink/70 rounded-full pl-3 pr-2 py-1.5 hover:bg-sage transition-colors"
         >
-          Search: &quot;{searchParams.search}&quot;
+          Search: &quot;{search}&quot;
           <FiX size={13} />
         </Link>
       )}
 
       <ProductListingClient
-        category={searchParams.category || ""}
-        search={searchParams.search || ""}
-        sale={Boolean(searchParams.sale)}
+        key={instanceKey}
+        category={category}
+        search={search}
+        sale={sale}
         initialSort={
-          searchParams.sort === "newest" || searchParams.sort === "bestseller"
-            ? searchParams.sort
-            : "featured"
+          sort === "newest" || sort === "bestseller" ? sort : "featured"
         }
       />
     </div>
